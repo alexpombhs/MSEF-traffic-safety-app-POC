@@ -147,7 +147,7 @@ export default function App() {
       .catch(error => {
         if (!controller.signal.aborted) {
           console.error('OSM crossings:', error);
-          setDataError('Crossing inventory temporarily unavailable. The historical study data remains visible.');
+          setDataError('No Great Road crossing markers could be loaded from OpenStreetMap. Try Refresh crossings. This does not mean there are no physical crosswalks.');
           setLoaded(true);
         }
       });
@@ -159,6 +159,14 @@ export default function App() {
     (mapRef.current?.getSource('crossings') as GeoJSONSource | undefined)
       ?.setData(crossingFeatures(visibleCrossings));
   }, [crossings, onlyMissing, mapReady]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (map?.getLayer('traffic-study-sites-points')) {
+      map.setLayoutProperty('traffic-study-sites-points', 'visibility', showTrafficStations ? 'visible' : 'none');
+    }
+  }, [mapReady, showTrafficStations]);
 
   useEffect(() => {
     const cross = (event: Event) => {
@@ -220,7 +228,7 @@ export default function App() {
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Chip color="primary" variant="outlined" label={loaded ? `${crossings.length} OSM candidate crossings` : 'Loading crossings…'} />
-            <Chip variant="outlined" label={`${trafficStudySites.length} historic traffic stations`} />
+            <Chip variant="outlined" label={`${trafficStudySites.length} historic traffic stations (hidden by default)`} />
             <Chip variant="outlined" label="Crash records not yet linked to crossings" />
           </Stack>
         </Stack>
@@ -237,6 +245,7 @@ export default function App() {
               </Stack>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
+              {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
               {!mapReady && !mapError && <Typography sx={{ my: 1 }}>Loading map…</Typography>}
               <Box ref={mapEl} role="region" aria-label="Great Road crossing and historic traffic map"
                 sx={{ mt: 2, height: { xs: 370, md: 520 }, bgcolor: '#e6ece9', borderRadius: 1.5, overflow: 'hidden' }} />
