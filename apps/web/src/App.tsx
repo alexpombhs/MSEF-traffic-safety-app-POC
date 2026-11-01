@@ -7,6 +7,7 @@ import { PROJECT_NAME } from '@msef/core';
 import { loadOSMCrossings, parseCrossingGeoJSON, type OSMCrossing } from './osmCrossings';
 import { trafficStudySites, type TrafficStudySite } from './trafficStudySites';
 import ResearchWorkspace from './ResearchWorkspace';
+import { repositoryCrossings, readSavedCrossings, saveCrossings, mergeCrossings } from './crossingInventory';
 import { studyIntersections, intersectionSource } from './studyIntersections';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
@@ -58,10 +59,10 @@ export default function App() {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
-  const [crossings, setCrossings] = useState<OSMCrossing[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [crossingLoadStatus, setCrossingLoadStatus] = useState('Fetching Great Road crossing records…');
-  const [crossingSource, setCrossingSource] = useState('Live OpenStreetMap');
+  const [crossings, setCrossings] = useState<OSMCrossing[]>(() => mergeCrossings(repositoryCrossings, readSavedCrossings()));
+  const [loaded, setLoaded] = useState(true);
+  const [crossingLoadStatus, setCrossingLoadStatus] = useState('Local crosswalk inventory loaded');
+  const [crossingSource, setCrossingSource] = useState('Repository GeoJSON + local saved crossings');
   const [reload, setReload] = useState(0);
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
@@ -139,23 +140,33 @@ export default function App() {
     return () => { disposed = true; mapRef.current = null; map?.remove(); };
   }, []);
 
+  // Network refresh is explicitly requested. The initial map uses a local snapshot.
   useEffect(() => {
+    if (reload === 0) return;
     const controller = new AbortController();
     setLoaded(false);
     setDataError(null);
-    setCrossingLoadStatus('Fetching Great Road crossing records…');
+    setCrossingLoadStatus('Checking OpenStreetMap for crossing updates…');
     loadOSMCrossings(controller.signal)
       .then(points => {
-        if (!controller.signal.aborted) { setCrossings(points); setLoaded(true); setCrossingLoadStatus(`${points.length} candidate crossings loaded from OpenStreetMap`); setCrossingSource('Live OpenStreetMap'); }
+        if (controller.signal.aborted) return;
+        const combined = mergeCrossings(repositoryCrossings, readSavedCrossings(), points);
+        setCrossings(combined);
+        try {
+          saveCrossings(combined);
+          setCrossingSource('Repository GeoJSON + cached OSM refresh');
+        } catch {
+          setCrossingSource('Repository GeoJSON + OSM (save blocked)');
+          setDataError('Crossings loaded but this browser could not save them for next time. Export a backup.');
+        }
+        setLoaded(true);
+        setCrossingLoadStatus(`${combined.length} crossings available; ${points.length} found in live OSM refresh`);
       })
       .catch(error => {
-        if (!controller.signal.aborted) {
-          console.error('OSM crossings:', error);
-          setCrossings([]);
-          setDataError(`Unable to load crossing data: ${error instanceof Error ? error.message : 'unknown error'}. Try Refresh crossings. No official crosswalk inventory has been loaded.`);
-          setCrossingLoadStatus('Crossing request failed');
-          setLoaded(true);
-        }
+        if (controller.signal.aborted) return;
+        setDataError(`Live refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}. Saved crossings remain available.`);
+        setCrossingLoadStatus('Using saved crosswalk inventory');
+        setLoaded(true);
       });
     return () => controller.abort();
   }, [reload]);
@@ -209,11 +220,13 @@ export default function App() {
     try {
       const points = parseCrossingGeoJSON(JSON.parse(await file.text()) as unknown);
       if (!points.length) throw new Error('No valid Bedford-area point records in the file');
-      setCrossings(points);
+      const combined = mergeCrossings(repositoryCrossings, readSavedCrossings(), points);
+      setCrossings(combined);
       setLoaded(true);
       setDataError(null);
-      setCrossingSource('Imported local GeoJSON');
-      setCrossingLoadStatus(`${points.length} imported candidate crossings (unverified)`);
+      try { saveCrossings(combined); } catch { setDataError('Imported crossings are visible but could not be saved in this browser.'); }
+      setCrossingSource('Repository GeoJSON + imported local GeoJSON');
+      setCrossingLoadStatus(`${combined.length} candidates available (${points.length} newly imported)`);
     } catch (error) {
       setDataError(`Import failed: ${error instanceof Error ? error.message : 'Invalid file'}`);
     }
@@ -248,7 +261,7 @@ export default function App() {
             This is a research inventory, not a verified safety ranking.
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            <Chip color="primary" variant="outlined" icon={!loaded ? <CircularProgress size={14} color="inherit" /> : undefined} label={loaded ? `${crossings.length} OSM candidate crossings` : 'Loading crossings…'} />
+            <Chip color="primary" variant="outlined" icon={!loaded ? <CircularProgress size={14} color="inherit" /> : undefined} label={loaded ? `${crossings.length} candidate crossings in inventory` : 'Refreshing crossings…'} />
             <Chip variant="outlined" label={`${trafficStudySites.length} historic traffic stations (hidden by default)`} />
             <Chip variant="outlined" label="Crash records not yet linked to crossings" />
           </Stack>
@@ -274,6 +287,7 @@ export default function App() {
               <Typography variant="caption" color="text.secondary" display="block">Data source: {crossingSource}</Typography>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
+              {loaded && crossings.length === 0 && <Alert severity="info" sx={{ my: 1 }}>The versioned inventory does not yet contain verified crossing coordinates. Import a sourced GeoJSON file or use Retry live data to discover candidates. No locations have been invented.</Alert>}
               {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
               {!mapReady && !mapError && <Typography sx={{ my: 1 }}>Loading map…</Typography>}
               <Box ref={mapEl} role="region" aria-label="Great Road crossing and historic traffic map"
