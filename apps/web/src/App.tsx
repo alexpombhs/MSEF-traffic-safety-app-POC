@@ -7,6 +7,7 @@ import { PROJECT_NAME } from '@msef/core';
 import { loadOSMCrossings, parseCrossingGeoJSON, type OSMCrossing } from './osmCrossings';
 import { trafficStudySites, type TrafficStudySite } from './trafficStudySites';
 import ResearchWorkspace from './ResearchWorkspace';
+import { studyIntersections, intersectionSource } from './studyIntersections';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 
@@ -385,6 +386,26 @@ export default function App() {
             </Paper>
           </Stack>
         </Box>
+        <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+          <Typography variant="h6">Great Road corridor audit · 11 study intersections</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>
+            Bedford's traffic study identifies these intersections. This list is available even if live
+            OpenStreetMap requests fail. The intersections are NOT an inventory of individual
+            crosswalks: each may contain several crossing approaches. Exact crossing locations
+            and current features must still be verified using 2026 plans or field surveys.
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1, mt: 1 }}>
+            {studyIntersections.map((name, index) => (
+              <Box key={name} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Typography variant="body2" fontWeight={600}>{index + 1}. {name}</Typography>
+                <Chip label="Crosswalk count not verified" size="small" variant="outlined" sx={{ mt: 1 }} />
+              </Box>
+            ))}
+          </Box>
+          <Link href={intersectionSource} target="_blank" rel="noopener noreferrer" sx={{ display: 'block', mt: 2 }}>
+            Source: Bedford Great Road Traffic Optimization Study intersection map
+          </Link>
+        </Paper>
         <ResearchWorkspace crossings={crossings} selectedId={selectedCrossingId} />
         <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 2 }}>
           Map © OpenStreetMap contributors; basemap OpenFreeMap. Missing does not mean absent, zero or safe.
