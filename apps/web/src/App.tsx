@@ -64,7 +64,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(true);
   const [crossingLoadStatus, setCrossingLoadStatus] = useState('Local crosswalk inventory loaded');
   const [crossingSource, setCrossingSource] = useState('Repository GeoJSON + local saved crossings');
-  const [reload, setReload] = useState(0);
+  const [reload, setReload] = useState(() => mergeCrossings(repositoryCrossings, readSavedCrossings()).length ? 0 : 1);
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
@@ -172,7 +172,7 @@ export default function App() {
     const controller = new AbortController();
     setLoaded(false);
     setDataError(null);
-    setCrossingLoadStatus('Checking OpenStreetMap for crossing updates…');
+    setCrossingLoadStatus('Searching live OpenStreetMap map data (fallback: Private.coffee)…');
     loadOSMCrossings(controller.signal)
       .then(points => {
         if (controller.signal.aborted) return;
@@ -190,7 +190,7 @@ export default function App() {
       })
       .catch(error => {
         if (controller.signal.aborted) return;
-        setDataError(`Live refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}. Saved crossings remain available.`);
+        setDataError(`Live crossing sources failed: ${error instanceof Error ? error.message : 'Unknown error'}. Locally saved crossing records remain available. The public APIs may be blocked by your network or browser.`);
         setCrossingLoadStatus('Using saved crosswalk inventory');
         setLoaded(true);
       });
@@ -317,7 +317,7 @@ export default function App() {
                   <FormControlLabel control={<Switch size="small" checked={showTrafficStations} onChange={(_, visible) => { setShowTrafficStations(visible); if (!visible) setSelectedStudyId(null); }} />} label="Show traffic-count stations (2021)" />
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                  <Button size="small" onClick={() => setReload(n => n + 1)}>Retry live data</Button>
+                  <Button size="small" disabled={!loaded} onClick={() => setReload(n => n + 1)}>Refresh live crossings</Button>
                 </Stack>
               </Stack>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
