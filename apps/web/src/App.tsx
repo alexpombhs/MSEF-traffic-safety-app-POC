@@ -7,6 +7,7 @@ import { PROJECT_NAME } from '@msef/core';
 import { loadOSMCrossings, parseCrossingGeoJSON, type OSMCrossing } from './osmCrossings';
 import { trafficStudySites, type TrafficStudySite } from './trafficStudySites';
 import ResearchWorkspace from './ResearchWorkspace';
+import { documentedCrossingAreas } from './documentedCrossingAreas';
 import { repositoryCrossings, readSavedCrossings, saveCrossings, mergeCrossings } from './crossingInventory';
 import { studyIntersections, intersectionSource } from './studyIntersections';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -66,6 +67,7 @@ export default function App() {
   const [reload, setReload] = useState(0);
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [showTrafficStations, setShowTrafficStations] = useState(false);
   const [activeTab, setActiveTab] = useState<'explore' | 'entry'>('explore');
@@ -75,6 +77,7 @@ export default function App() {
     [crossings, selectedCrossingId],
   );
   const selectedStudy = trafficStudySites.find(s => s.id === selectedStudyId) ?? null;
+  const selectedArea = documentedCrossingAreas.find(a => a.id === selectedAreaId) ?? null;
   const needSurvey = (point: OSMCrossing) => surveyFields.some(f => !point.tags[f.key]);
   const visibleCrossings = crossings.filter(point => !onlyMissing || needSurvey(point));
 
@@ -105,6 +108,28 @@ export default function App() {
               'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 5, 15, 9],
               'circle-color': '#087d72', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2,
             },
+          });
+          map.addSource('documented-crossing-areas', { type: 'geojson', data: {
+            type: 'FeatureCollection',
+            features: documentedCrossingAreas.map(area => ({
+              type: 'Feature' as const,
+              geometry: { type: 'Point' as const, coordinates: [area.lon, area.lat] },
+              properties: { id: area.id },
+            })),
+          } });
+          map.addLayer({
+            id: 'documented-crossing-areas-points', type: 'circle', source: 'documented-crossing-areas',
+            paint: {
+              'circle-radius': 11,
+              'circle-color': '#7650a4',
+              'circle-opacity': 0.55,
+              'circle-stroke-color': '#50366d',
+              'circle-stroke-width': 2,
+            },
+          });
+          map.on('click', 'documented-crossing-areas-points', event => {
+            const id = String(event.features?.[0]?.properties?.id ?? '');
+            if (id) window.dispatchEvent(new CustomEvent('msef-select-crossing-area', { detail: id }));
           });
           map.addSource('traffic-study-sites', { type: 'geojson', data: studyFeatures(trafficStudySites) });
           map.addLayer({
@@ -195,9 +220,12 @@ export default function App() {
       setSelectedStudyId((event as CustomEvent<string>).detail);
       setSelectedCrossingId(null);
     };
+    const area = (event: Event) => { setSelectedAreaId((event as CustomEvent<string>).detail); setSelectedCrossingId(null); setSelectedStudyId(null); };
+    window.addEventListener('msef-select-crossing-area', area);
     window.addEventListener('msef-select-crossing', cross);
     window.addEventListener('msef-select-study', study);
     return () => {
+      window.removeEventListener('msef-select-crossing-area', area);
       window.removeEventListener('msef-select-crossing', cross);
       window.removeEventListener('msef-select-study', study);
     };
@@ -284,7 +312,8 @@ export default function App() {
             <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap">
                 <Stack direction="row" spacing={2} alignItems="center" useFlexGap flexWrap="wrap">
-                  <Chip size="small" label="● Crossings (OSM)" sx={{ bgcolor: '#d9f1ec', color: '#075c53' }} />
+                  <Chip size="small" label="● Crossing candidates (OSM)" sx={{ bgcolor: '#d9f1ec', color: '#075c53' }} />
+                  <Chip size="small" label="● Documented crossing areas (approximate)" sx={{ bgcolor: '#ede4f6', color: '#50366d' }} />
                   <FormControlLabel control={<Switch size="small" checked={showTrafficStations} onChange={(_, visible) => { setShowTrafficStations(visible); if (!visible) setSelectedStudyId(null); }} />} label="Show traffic-count stations (2021)" />
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
@@ -298,7 +327,7 @@ export default function App() {
               <Typography variant="caption" color="text.secondary" display="block">Data source: {crossingSource}</Typography>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
-              {loaded && crossings.length === 0 && <Alert severity="info" sx={{ my: 1 }}>The versioned inventory does not yet contain verified crossing coordinates. Import a sourced GeoJSON file or use Retry live data to discover candidates. No locations have been invented.</Alert>}
+              {loaded && crossings.length === 0 && <Alert severity="info" sx={{ my: 1 }}>Purple reference markers are documented crossing AREAS, not exact crosswalks. The versioned inventory does not yet contain verified crossing coordinates. Import a sourced GeoJSON file or use Retry live data to discover candidates. No locations have been invented.</Alert>}
               {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
               {!mapReady && !mapError && <Typography sx={{ my: 1 }}>Loading map…</Typography>}
               <Box ref={mapEl} role="region" aria-label="Great Road crossing and historic traffic map"
@@ -366,7 +395,16 @@ export default function App() {
             <Card variant="outlined">
               <CardContent>
                 <Typography variant="h6">Selected location</Typography>
-                {selectedCrossing ? (
+                {selectedArea ? (
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    <Typography fontWeight={600}>{selectedArea.name}</Typography>
+                    <Alert severity="info">Reference area only. This is NOT a surveyed crosswalk marker.</Alert>
+                    <Typography variant="body2">{selectedArea.details}</Typography>
+                    <Typography variant="body2" color="text.secondary">{selectedArea.locationPrecision}</Typography>
+                    <Link href={selectedArea.source} target="_blank" rel="noopener noreferrer">Location source</Link>
+                    <Link href={STUDY_SOURCE} target="_blank" rel="noopener noreferrer">Crossing study source</Link>
+                  </Stack>
+                ) : selectedCrossing ? (
                   <Stack spacing={1} sx={{ mt: 1 }}>
                     <Typography fontWeight={600}>OSM crossing #{selectedCrossing.id}</Typography>
                     <Typography variant="body2">Crossing type: {fieldValue(selectedCrossing.tags.crossing)}</Typography>
