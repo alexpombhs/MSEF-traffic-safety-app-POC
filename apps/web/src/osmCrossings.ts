@@ -64,20 +64,27 @@ export async function loadOSMCrossings(signal?: AbortSignal): Promise<OSMCrossin
   let lastError: unknown;
   for (const endpoint of ENDPOINTS) {
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), 12000);
+    const abort = () => timeoutController.abort();
+    signal?.addEventListener('abort', abort, { once: true });
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         body: new URLSearchParams({ data: QUERY }),
-        signal,
+        signal: timeoutController.signal,
       });
       if (!response.ok) throw new Error(`Overpass HTTP ${response.status}`);
       const crossings = parseGreatRoadCrossings(await response.json() as OverpassResult);
       if (crossings.length === 0) throw new Error('No nearby crossing nodes returned');
       return crossings;
     } catch (error) {
-      if (signal?.aborted) throw error;
-      lastError = error;
+      if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+      lastError = timeoutController.signal.aborted ? new Error('Crossing data server timed out') : error;
       console.warn('Crossing data endpoint failed:', endpoint, error);
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Could not load Great Road crossing candidates');
