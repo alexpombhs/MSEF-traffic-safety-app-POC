@@ -60,32 +60,50 @@ function parseGreatRoadCrossings(json: OverpassResult): OSMCrossing[] {
   }));
 }
 
+// Use one bounded request. Never let the UI spin through several slow servers.
 export async function loadOSMCrossings(signal?: AbortSignal): Promise<OSMCrossing[]> {
-  let lastError: unknown;
-  for (const endpoint of ENDPOINTS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  const cancel = () => controller.abort();
+  signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    const response = await fetch('https://overpass.kumi.systems/api/interpreter', {
+      method: 'POST',
+      body: new URLSearchParams({ data: QUERY }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`OpenStreetMap request failed (HTTP ${response.status})`);
+    const crossings = parseGreatRoadCrossings(await response.json() as OverpassResult);
+    if (!crossings.length) throw new Error('No crossing records found near Great Road');
+    return crossings;
+  } catch (error) {
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    const timeoutController = new AbortController();
-    const timer = setTimeout(() => timeoutController.abort(), 12000);
-    const abort = () => timeoutController.abort();
-    signal?.addEventListener('abort', abort, { once: true });
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: new URLSearchParams({ data: QUERY }),
-        signal: timeoutController.signal,
-      });
-      if (!response.ok) throw new Error(`Overpass HTTP ${response.status}`);
-      const crossings = parseGreatRoadCrossings(await response.json() as OverpassResult);
-      if (crossings.length === 0) throw new Error('No nearby crossing nodes returned');
-      return crossings;
-    } catch (error) {
-      if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-      lastError = timeoutController.signal.aborted ? new Error('Crossing data server timed out') : error;
-      console.warn('Crossing data endpoint failed:', endpoint, error);
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', abort);
-    }
+    if (controller.signal.aborted) throw new Error('OpenStreetMap request timed out after 8 seconds');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
   }
-  throw lastError instanceof Error ? lastError : new Error('Could not load Great Road crossing candidates');
+}
+
+// Import a locally saved OSM GeoJSON FeatureCollection containing point features.
+// This does not certify completeness; it only removes live-network dependence.
+export function parseCrossingGeoJSON(raw: unknown): OSMCrossing[] {
+  if (typeof raw !== 'object' || raw === null || !('features' in raw)) throw new Error('Expected a GeoJSON FeatureCollection');
+  const collection = raw as { features?: unknown };
+  if (!Array.isArray(collection.features)) throw new Error('Invalid GeoJSON features');
+  const candidates = collection.features.flatMap((feature: unknown, index: number): OSMCrossing[] => {
+    if (typeof feature !== 'object' || feature === null) return [];
+    const f = feature as { id?: number | string; geometry?: { type?: string; coordinates?: unknown }; properties?: Record<string, unknown> };
+    if (f.geometry?.type !== 'Point' || !Array.isArray(f.geometry.coordinates)) return [];
+    const [lon, lat] = f.geometry.coordinates;
+    if (typeof lon !== 'number' || typeof lat !== 'number' || !Number.isFinite(lon) || !Number.isFinite(lat)) return [];
+    if (lat < 42.465 || lat > 42.516 || lon < -71.32 || lon > -71.23) return [];
+    const tags = Object.fromEntries(Object.entries(f.properties ?? {}).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
+    const rawId = f.id ?? f.properties?.['@id'] ?? f.properties?.id;
+    const id = Number(String(rawId ?? index).replace(/^node\//, ''));
+    if (!Number.isSafeInteger(id)) return [];
+    return [{ id, lat, lon, tags }];
+  });
+  return [...new Map(candidates.map(c => [c.id, c])).values()];
 }
