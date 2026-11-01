@@ -59,6 +59,7 @@ export default function App() {
   const [dataError, setDataError] = useState<string | null>(null);
   const [crossings, setCrossings] = useState<OSMCrossing[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [crossingLoadStatus, setCrossingLoadStatus] = useState('Fetching Great Road crossing records…');
   const [reload, setReload] = useState(0);
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
@@ -140,14 +141,17 @@ export default function App() {
     const controller = new AbortController();
     setLoaded(false);
     setDataError(null);
+    setCrossingLoadStatus('Fetching Great Road crossing records…');
     loadOSMCrossings(controller.signal)
       .then(points => {
-        if (!controller.signal.aborted) { setCrossings(points); setLoaded(true); }
+        if (!controller.signal.aborted) { setCrossings(points); setLoaded(true); setCrossingLoadStatus(`${points.length} candidate crossings loaded from OpenStreetMap`); }
       })
       .catch(error => {
         if (!controller.signal.aborted) {
           console.error('OSM crossings:', error);
-          setDataError('No Great Road crossing markers could be loaded from OpenStreetMap. Try Refresh crossings. This does not mean there are no physical crosswalks.');
+          setCrossings([]);
+          setDataError(`Unable to load crossing data: ${error instanceof Error ? error.message : 'unknown error'}. Try Refresh crossings. No official crosswalk inventory has been loaded.`);
+          setCrossingLoadStatus('Crossing request failed');
           setLoaded(true);
         }
       });
@@ -243,6 +247,7 @@ export default function App() {
                 </Stack>
                 <Button size="small" onClick={() => setReload(n => n + 1)}>Refresh crossings</Button>
               </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{crossingLoadStatus}</Typography>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
               {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
