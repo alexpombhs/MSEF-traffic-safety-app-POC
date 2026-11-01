@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, AppBar, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Divider, FormControlLabel,
-  Link, List, ListItemButton, ListItemText, Paper, Stack, Switch, Toolbar, Typography,
+  Link, List, ListItemButton, ListItemText, Paper, Stack, Switch, Tab, Tabs, Toolbar, Typography,
 } from '@mui/material';
 import { PROJECT_NAME } from '@msef/core';
 import { loadOSMCrossings, parseCrossingGeoJSON, type OSMCrossing } from './osmCrossings';
@@ -68,6 +68,7 @@ export default function App() {
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [showTrafficStations, setShowTrafficStations] = useState(false);
+  const [activeTab, setActiveTab] = useState<'explore' | 'entry'>('explore');
 
   const selectedCrossing = useMemo(
     () => crossings.find(c => c.id === selectedCrossingId) ?? null,
@@ -267,6 +268,17 @@ export default function App() {
           </Stack>
         </Stack>
 
+        <Paper variant="outlined" sx={{ mb: 2 }}>
+          <Tabs value={activeTab} onChange={(_, value: 'explore' | 'entry') => {
+            setActiveTab(value);
+            if (value === 'explore') window.setTimeout(() => mapRef.current?.resize(), 0);
+          }} aria-label="Great Road research sections">
+            <Tab value="explore" label="Explore & Analyze" />
+            <Tab value="entry" label="Field Data Entry" />
+          </Tabs>
+        </Paper>
+
+        <Box role="tabpanel" aria-label="Explore and analyze" hidden={activeTab !== 'explore'} sx={{ display: activeTab === 'explore' ? 'block' : 'none' }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 2fr) minmax(300px, 1fr)' }, gap: 2 }}>
           <Box sx={{ minWidth: 0 }}>
             <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -276,7 +288,6 @@ export default function App() {
                   <FormControlLabel control={<Switch size="small" checked={showTrafficStations} onChange={(_, visible) => { setShowTrafficStations(visible); if (!visible) setSelectedStudyId(null); }} />} label="Show traffic-count stations (2021)" />
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                  <Button component="label" size="small" variant="outlined">Import GeoJSON<input type="file" accept=".geojson,.json,application/geo+json,application/json" hidden onChange={e => { void importGeoJSON(e.target.files?.[0]); e.target.value = ''; }} /></Button>
                   <Button size="small" onClick={() => setReload(n => n + 1)}>Retry live data</Button>
                 </Stack>
               </Stack>
@@ -420,7 +431,22 @@ export default function App() {
             Source: Bedford Great Road Traffic Optimization Study intersection map
           </Link>
         </Paper>
-        <ResearchWorkspace crossings={crossings} selectedId={selectedCrossingId} />
+        </Box>
+        {activeTab === 'entry' && (
+          <Box role="tabpanel" aria-label="Field data entry">
+            <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+              <Typography variant="h6">Manage crossing inventory</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>
+                Import a sourced GeoJSON crossing inventory for this browser. This is separate from exploring and analyzing the map.
+              </Typography>
+              <Button component="label" variant="outlined" size="small">
+                Import crossing GeoJSON
+                <input type="file" accept=".geojson,.json,application/geo+json,application/json" hidden onChange={e => { void importGeoJSON(e.target.files?.[0]); e.target.value = ''; }} />
+              </Button>
+            </Paper>
+            <ResearchWorkspace crossings={crossings} selectedId={selectedCrossingId} />
+          </Box>
+        )}
         <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 2 }}>
           Map © OpenStreetMap contributors; basemap OpenFreeMap. Missing does not mean absent, zero or safe.
           Historic observations are not live traffic. No crosswalk-specific crash rates or safety scores have been inferred.
