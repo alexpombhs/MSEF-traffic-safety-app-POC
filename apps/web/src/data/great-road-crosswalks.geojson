@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "road": "Great Road, Bedford, Massachusetts",
+    "version": "2026-11-01",
+    "status": "incomplete",
+    "description": "Repository inventory. Only independently sourced coordinate records should be added. No coordinates have been verified for this initial snapshot.",
+    "sourcePlans": "https://www.bedfordma.gov/1033/Great-Road-Improvement-Project"
+  },
+  "features": []
+}
