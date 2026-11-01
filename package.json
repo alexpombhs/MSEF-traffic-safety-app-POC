@@ -1,0 +1,22 @@
+{
+  "name": "msef-traffic-safety",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @msef/web",
+    "build:web": "npm run build -w @msef/web",
+    "typecheck": "npm run typecheck -w @msef/core && npm run typecheck -w @msef/web",
+    "start:mobile": "npm run start -w @msef/mobile"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

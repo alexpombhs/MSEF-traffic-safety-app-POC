@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Bedford Traffic Safety",
+    "slug": "bedford-traffic-safety",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic"
+  }
+}
