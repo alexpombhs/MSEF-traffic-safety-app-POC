@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, AppBar, Box, Button, Card, CardContent, Chip, Container, Divider, FormControlLabel,
+  Alert, AppBar, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Divider, FormControlLabel,
   Link, List, ListItemButton, ListItemText, Paper, Stack, Switch, Toolbar, Typography,
 } from '@mui/material';
 import { PROJECT_NAME } from '@msef/core';
@@ -231,7 +231,7 @@ export default function App() {
             This is a research inventory, not a verified safety ranking.
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            <Chip color="primary" variant="outlined" label={loaded ? `${crossings.length} OSM candidate crossings` : 'Loading crossings…'} />
+            <Chip color="primary" variant="outlined" icon={!loaded ? <CircularProgress size={14} color="inherit" /> : undefined} label={loaded ? `${crossings.length} OSM candidate crossings` : 'Loading crossings…'} />
             <Chip variant="outlined" label={`${trafficStudySites.length} historic traffic stations (hidden by default)`} />
             <Chip variant="outlined" label="Crash records not yet linked to crossings" />
           </Stack>
@@ -247,7 +247,10 @@ export default function App() {
                 </Stack>
                 <Button size="small" onClick={() => setReload(n => n + 1)}>Refresh crossings</Button>
               </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{crossingLoadStatus}</Typography>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+                {!loaded && <CircularProgress size={16} aria-label="Loading crossings" />}
+                <Typography variant="caption" color="text.secondary" role="status">{crossingLoadStatus}</Typography>
+              </Stack>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
               {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
