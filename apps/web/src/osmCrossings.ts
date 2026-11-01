@@ -9,10 +9,10 @@ type OverpassResult = {
   elements?: Array<{ type: string; id: number; lat?: number; lon?: number; tags?: Record<string, string> }>;
 };
 
-// Geographic bounding box around central Bedford, Massachusetts; NOT the town boundary.
-// All points represent OpenStreetMap contributors' mapped crossing locations,
-// not independently surveyed or validated infrastructure.
-const QUERY = `[out:json][timeout:30];(node["highway"="crossing"](42.466,-71.315,42.514,-71.236););out body;`;
+// Candidate crossings within 30 m of OSM Great Road highway ways in central Bedford.
+// The road name and buffer must be checked against Bedford construction plans:
+// this is not a certified town crosswalk inventory.
+const QUERY = `[out:json][timeout:40];way["highway"]["name"~"^(The )?Great (Road|Rd\\.?)$",i](42.465,-71.320,42.516,-71.230)->.greatroad;node(around.greatroad:30)["highway"="crossing"];out body;`;
 const ENDPOINTS = [
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
