@@ -38,10 +38,6 @@ export default function App() {
         const lib = await import('maplibre-gl');
         if (disposed || !mapEl.current) return;
         lib.setWorkerUrl(workerUrl);
-        if (!lib.supported()) {
-          setMapError('Interactive maps require WebGL2 support. Try an updated browser with hardware acceleration enabled.');
-          return;
-        }
         map = new lib.Map({
           container: mapEl.current,
           style: BASEMAP_STYLE,
