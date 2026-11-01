@@ -4,7 +4,7 @@ import {
   Link, List, ListItemButton, ListItemText, Paper, Stack, Switch, Toolbar, Typography,
 } from '@mui/material';
 import { PROJECT_NAME } from '@msef/core';
-import { loadOSMCrossings, type OSMCrossing } from './osmCrossings';
+import { loadOSMCrossings, parseCrossingGeoJSON, type OSMCrossing } from './osmCrossings';
 import { trafficStudySites, type TrafficStudySite } from './trafficStudySites';
 import ResearchWorkspace from './ResearchWorkspace';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -60,6 +60,7 @@ export default function App() {
   const [crossings, setCrossings] = useState<OSMCrossing[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [crossingLoadStatus, setCrossingLoadStatus] = useState('Fetching Great Road crossing records…');
+  const [crossingSource, setCrossingSource] = useState('Live OpenStreetMap');
   const [reload, setReload] = useState(0);
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
@@ -144,7 +145,7 @@ export default function App() {
     setCrossingLoadStatus('Fetching Great Road crossing records…');
     loadOSMCrossings(controller.signal)
       .then(points => {
-        if (!controller.signal.aborted) { setCrossings(points); setLoaded(true); setCrossingLoadStatus(`${points.length} candidate crossings loaded from OpenStreetMap`); }
+        if (!controller.signal.aborted) { setCrossings(points); setLoaded(true); setCrossingLoadStatus(`${points.length} candidate crossings loaded from OpenStreetMap`); setCrossingSource('Live OpenStreetMap'); }
       })
       .catch(error => {
         if (!controller.signal.aborted) {
@@ -202,6 +203,21 @@ export default function App() {
     mapRef.current?.flyTo({ center: [site.lon, site.lat], zoom: 15 });
   }
 
+  async function importGeoJSON(file: File | undefined) {
+    if (!file) return;
+    try {
+      const points = parseCrossingGeoJSON(JSON.parse(await file.text()) as unknown);
+      if (!points.length) throw new Error('No valid Bedford-area point records in the file');
+      setCrossings(points);
+      setLoaded(true);
+      setDataError(null);
+      setCrossingSource('Imported local GeoJSON');
+      setCrossingLoadStatus(`${points.length} imported candidate crossings (unverified)`);
+    } catch (error) {
+      setDataError(`Import failed: ${error instanceof Error ? error.message : 'Invalid file'}`);
+    }
+  }
+
   function exportInventory() {
     const headers = ['osm_id', 'latitude', 'longitude', 'crossing_type', ...surveyFields.map(field => field.key), 'source_url'];
     const rows = crossings.map(c => [
@@ -245,12 +261,16 @@ export default function App() {
                   <Chip size="small" label="● Crossings (OSM)" sx={{ bgcolor: '#d9f1ec', color: '#075c53' }} />
                   <FormControlLabel control={<Switch size="small" checked={showTrafficStations} onChange={(_, visible) => { setShowTrafficStations(visible); if (!visible) setSelectedStudyId(null); }} />} label="Show traffic-count stations (2021)" />
                 </Stack>
-                <Button size="small" onClick={() => setReload(n => n + 1)}>Refresh crossings</Button>
+                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                  <Button component="label" size="small" variant="outlined">Import GeoJSON<input type="file" accept=".geojson,.json,application/geo+json,application/json" hidden onChange={e => { void importGeoJSON(e.target.files?.[0]); e.target.value = ''; }} /></Button>
+                  <Button size="small" onClick={() => setReload(n => n + 1)}>Retry live data</Button>
+                </Stack>
               </Stack>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
                 {!loaded && <CircularProgress size={16} aria-label="Loading crossings" />}
                 <Typography variant="caption" color="text.secondary" role="status">{crossingLoadStatus}</Typography>
               </Stack>
+              <Typography variant="caption" color="text.secondary" display="block">Data source: {crossingSource}</Typography>
               {mapError && <Alert severity="warning" sx={{ my: 1 }}>{mapError}</Alert>}
               {dataError && <Alert severity="warning" sx={{ my: 1 }}>{dataError}</Alert>}
               {loaded && crossings.length === 0 && !dataError && <Alert severity="info" sx={{ my: 1 }}>No OpenStreetMap crossings were returned; the inventory is not complete.</Alert>}
