@@ -6,6 +6,7 @@ import {
 import { PROJECT_NAME } from '@msef/core';
 import { loadOSMCrossings, type OSMCrossing } from './osmCrossings';
 import { trafficStudySites, type TrafficStudySite } from './trafficStudySites';
+import ResearchWorkspace from './ResearchWorkspace';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 
@@ -344,6 +345,7 @@ export default function App() {
             </Paper>
           </Stack>
         </Box>
+        <ResearchWorkspace crossings={crossings} selectedId={selectedCrossingId} />
         <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 2 }}>
           Map © OpenStreetMap contributors; basemap OpenFreeMap. Missing does not mean absent, zero or safe.
           Historic observations are not live traffic. No crosswalk-specific crash rates or safety scores have been inferred.
