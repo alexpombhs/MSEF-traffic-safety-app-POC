@@ -63,6 +63,7 @@ export default function App() {
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
   const [selectedStudyId, setSelectedStudyId] = useState<string | null>(null);
   const [onlyMissing, setOnlyMissing] = useState(false);
+  const [showTrafficStations, setShowTrafficStations] = useState(false);
 
   const selectedCrossing = useMemo(
     () => crossings.find(c => c.id === selectedCrossingId) ?? null,
@@ -103,6 +104,7 @@ export default function App() {
           map.addSource('traffic-study-sites', { type: 'geojson', data: studyFeatures(trafficStudySites) });
           map.addLayer({
             id: 'traffic-study-sites-points', type: 'circle', source: 'traffic-study-sites',
+            layout: { visibility: 'none' },
             paint: {
               'circle-radius': 10, 'circle-color': '#b76521',
               'circle-stroke-color': '#fff', 'circle-stroke-width': 2.5,
@@ -182,6 +184,7 @@ export default function App() {
   }
 
   function pickStudy(site: TrafficStudySite) {
+    setShowTrafficStations(true);
     setSelectedStudyId(site.id);
     setSelectedCrossingId(null);
     mapRef.current?.flyTo({ center: [site.lon, site.lat], zoom: 15 });
@@ -228,7 +231,7 @@ export default function App() {
               <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap">
                 <Stack direction="row" spacing={2} alignItems="center" useFlexGap flexWrap="wrap">
                   <Chip size="small" label="● Crossings (OSM)" sx={{ bgcolor: '#d9f1ec', color: '#075c53' }} />
-                  <Chip size="small" label="● Traffic sites (2021)" sx={{ bgcolor: '#fae8d8', color: '#8c4616' }} />
+                  <FormControlLabel control={<Switch size="small" checked={showTrafficStations} onChange={(_, visible) => { setShowTrafficStations(visible); if (!visible) setSelectedStudyId(null); }} />} label="Show traffic-count stations (2021)" />
                 </Stack>
                 <Button size="small" onClick={() => setReload(n => n + 1)}>Refresh crossings</Button>
               </Stack>
@@ -247,7 +250,7 @@ export default function App() {
               <Stack spacing={2} sx={{ mt: 1.5 }}>
                 <Box>
                   <Typography fontWeight={600}>Great Road traffic study · 2021</Typography>
-                  <Typography variant="body2" color="text.secondary">Measured counts at three stations. Select one to see its sample date, direction, volume and primary source.</Typography>
+                  <Typography variant="body2" color="text.secondary">Measured counts at three stations. Stations are hidden on the map by default; choose a station below to display it and inspect its source.</Typography>
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }} useFlexGap flexWrap="wrap">
                     {trafficStudySites.map(site => <Button key={site.id} variant={selectedStudyId === site.id ? 'contained' : 'outlined'} size="small" onClick={() => pickStudy(site)}>{site.label}</Button>)}
                   </Stack>
